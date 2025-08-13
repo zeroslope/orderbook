@@ -1,10 +1,12 @@
 use anchor_lang::prelude::*;
 
 pub mod errors;
+pub mod events;
 pub mod instructions;
 pub mod state;
 
 pub use errors::ErrorCode;
+pub use events::*;
 use instructions::*;
 
 declare_id!("FpTyzdMqQS4NWM149ryMWq74waAoHXMBpJnXb4yUNV1F");

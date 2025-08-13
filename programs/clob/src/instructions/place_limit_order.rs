@@ -1,4 +1,5 @@
 use crate::errors::ErrorCode;
+use crate::events::{OrderPlaced, OrderFilled};
 use crate::state::{Market, BookSide, UserBalance, Order, Side, OrderBook};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{TokenAccount, TokenInterface};
@@ -63,8 +64,16 @@ pub struct PlaceLimitOrderParams {
 
 impl PlaceLimitOrder<'_> {
     pub fn apply(ctx: Context<PlaceLimitOrder>, params: PlaceLimitOrderParams) -> Result<()> {
-        require!(params.price > 0, ErrorCode::InvalidParameter);
-        require!(params.quantity > 0, ErrorCode::InvalidParameter);
+        // Enhanced parameter validation
+        require!(params.price > 0, ErrorCode::InvalidPrice);
+        require!(params.quantity > 0, ErrorCode::InvalidOrderSize);
+        
+        // Check if orderbook has space for new order (if not fully matched)
+        let orderbook_len = match params.side {
+            Side::Bid => ctx.accounts.bids_book.orderbook.len(),
+            Side::Ask => ctx.accounts.asks_book.orderbook.len(),
+        };
+        require!(orderbook_len < 50, ErrorCode::OrderbookFull); // Max 50 orders
 
         let market = &mut ctx.accounts.market;
         let user_balance = &mut ctx.accounts.user_balance;
@@ -161,6 +170,17 @@ impl PlaceLimitOrder<'_> {
                 }
             }
 
+            // Emit fill event
+            emit!(OrderFilled {
+                maker_order_id: fill.maker_order_id,
+                taker_order_id: fill.taker_order_id,
+                market: market.key(),
+                price: fill.price,
+                quantity: fill.quantity,
+                maker_owner: Pubkey::default(), // We'll need to store this in the future
+                taker_owner: ctx.accounts.user.key(),
+            });
+
             msg!(
                 "Order filled: maker_id={}, taker_id={}, price={}, quantity={}",
                 fill.maker_order_id,
@@ -201,6 +221,17 @@ impl PlaceLimitOrder<'_> {
                     ctx.accounts.asks_book.orderbook.insert_order(new_order.clone())?;
                 }
             }
+
+            // Emit order placed event for remaining quantity
+            emit!(OrderPlaced {
+                order_id: new_order.order_id,
+                owner: ctx.accounts.user.key(),
+                market: market.key(),
+                side: params.side,
+                price: new_order.price,
+                quantity: new_order.remaining_quantity,
+                timestamp: new_order.timestamp,
+            });
 
             msg!(
                 "Order placed: id={}, side={:?}, price={}, quantity={}",

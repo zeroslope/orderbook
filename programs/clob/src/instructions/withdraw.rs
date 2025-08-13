@@ -1,4 +1,5 @@
 use crate::errors::ErrorCode;
+use crate::events::UserWithdraw;
 use crate::state::{Market, UserBalance};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
@@ -56,7 +57,7 @@ impl Withdraw<'_> {
         let market = &ctx.accounts.market;
 
         // Check and update user balance record
-        if ctx.accounts.mint.key() == market.base_mint {
+        let new_balance = if ctx.accounts.mint.key() == market.base_mint {
             require!(
                 user_balance.base_balance >= params.amount,
                 ErrorCode::InsufficientBalance
@@ -65,6 +66,7 @@ impl Withdraw<'_> {
                 .base_balance
                 .checked_sub(params.amount)
                 .ok_or(ErrorCode::MathOverflow)?;
+            user_balance.base_balance
         } else {
             require!(
                 user_balance.quote_balance >= params.amount,
@@ -74,7 +76,8 @@ impl Withdraw<'_> {
                 .quote_balance
                 .checked_sub(params.amount)
                 .ok_or(ErrorCode::MathOverflow)?;
-        }
+            user_balance.quote_balance
+        };
 
         // Transfer tokens from vault to user using checked transfer
         let seeds: &[&[u8]] = &[
@@ -98,6 +101,15 @@ impl Withdraw<'_> {
             params.amount,
             ctx.accounts.mint.decimals,
         )?;
+
+        // Emit withdraw event
+        emit!(UserWithdraw {
+            user: ctx.accounts.user.key(),
+            market: market.key(),
+            mint: ctx.accounts.mint.key(),
+            amount: params.amount,
+            new_balance,
+        });
 
         msg!(
             "Withdrawn {} tokens of mint {} from market vault",

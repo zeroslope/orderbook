@@ -1,4 +1,5 @@
 use crate::errors::ErrorCode;
+use crate::events::MarketInitialized;
 use crate::state::{Market, BookSide, VecOrderBook, Side};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -108,6 +109,16 @@ impl Initialize<'_> {
         asks_book.market = market.key();
         asks_book.orderbook = VecOrderBook::new(Side::Ask);
         asks_book.bump = ctx.bumps.asks_book;
+
+        // Emit market initialized event
+        emit!(MarketInitialized {
+            market: market.key(),
+            authority: market.authority,
+            base_mint: market.base_mint,
+            quote_mint: market.quote_mint,
+            base_lot_size: market.base_lot_size,
+            quote_tick_size: market.quote_tick_size,
+        });
 
         msg!(
             "Market initialized: base={}, quote={}",

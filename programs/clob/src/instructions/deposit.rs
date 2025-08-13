@@ -1,4 +1,5 @@
 use crate::errors::ErrorCode;
+use crate::events::UserDeposit;
 use crate::state::{Market, UserBalance};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
@@ -78,17 +79,28 @@ impl Deposit<'_> {
         token_interface::transfer_checked(cpi_ctx, params.amount, ctx.accounts.mint.decimals)?;
 
         // Update user balance record
-        if ctx.accounts.mint.key() == market.base_mint {
+        let new_balance = if ctx.accounts.mint.key() == market.base_mint {
             user_balance.base_balance = user_balance
                 .base_balance
                 .checked_add(params.amount)
                 .ok_or(ErrorCode::MathOverflow)?;
+            user_balance.base_balance
         } else {
             user_balance.quote_balance = user_balance
                 .quote_balance
                 .checked_add(params.amount)
                 .ok_or(ErrorCode::MathOverflow)?;
-        }
+            user_balance.quote_balance
+        };
+
+        // Emit deposit event
+        emit!(UserDeposit {
+            user: ctx.accounts.user.key(),
+            market: market.key(),
+            mint: ctx.accounts.mint.key(),
+            amount: params.amount,
+            new_balance,
+        });
 
         msg!(
             "Deposited {} tokens of mint {} to market vault",

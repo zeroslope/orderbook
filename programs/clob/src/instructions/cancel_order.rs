@@ -1,4 +1,5 @@
 use crate::errors::ErrorCode;
+use crate::events::OrderCancelled;
 use crate::state::{Market, BookSide, UserBalance, OrderBook, Side};
 use anchor_lang::prelude::*;
 
@@ -55,7 +56,7 @@ impl CancelOrder<'_> {
             Side::Ask => ctx.accounts.asks_book.orderbook.remove_order(params.order_id)?,
         };
 
-        let order = removed_order.ok_or(ErrorCode::InvalidParameter)?; // Order not found
+        let order = removed_order.ok_or(ErrorCode::OrderNotFound)?;
 
         // Verify the order belongs to the user
         require!(order.owner == ctx.accounts.user.key(), ErrorCode::Unauthorized);
@@ -87,6 +88,15 @@ impl CancelOrder<'_> {
                     .ok_or(ErrorCode::MathOverflow)?;
             }
         }
+
+        // Emit order cancelled event
+        emit!(OrderCancelled {
+            order_id: order.order_id,
+            owner: ctx.accounts.user.key(),
+            market: market.key(),
+            side: params.side,
+            remaining_quantity: order.remaining_quantity,
+        });
 
         msg!(
             "Order cancelled: id={}, remaining_quantity={}",

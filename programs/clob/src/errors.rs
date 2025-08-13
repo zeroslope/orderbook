@@ -16,4 +16,16 @@ pub enum ErrorCode {
     InvalidAmount,
     #[msg("Invalid parameter")]
     InvalidParameter,
+    #[msg("Order not found")]
+    OrderNotFound,
+    #[msg("Orderbook full")]
+    OrderbookFull,
+    #[msg("Invalid order size")]
+    InvalidOrderSize,
+    #[msg("Invalid price")]
+    InvalidPrice,
+    #[msg("Market closed")]
+    MarketClosed,
+    #[msg("Slippage exceeded")]
+    SlippageExceeded,
 }

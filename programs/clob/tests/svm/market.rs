@@ -33,6 +33,8 @@ impl MarketFixture {
 
         let (base_vault, _) = get_vault_pda(&market, &base_mint.mint);
         let (quote_vault, _) = get_vault_pda(&market, &quote_mint.mint);
+        let (bids_book, _) = get_bids_book_pda(&market);
+        let (asks_book, _) = get_asks_book_pda(&market);
 
         let authority = ctx.payer.pubkey();
         let ix = Instruction {
@@ -44,6 +46,8 @@ impl MarketFixture {
                 quote_vault,
                 base_mint: base_mint.mint,
                 quote_mint: quote_mint.mint,
+                bids_book,
+                asks_book,
                 base_token_program: anchor_spl::token::ID,
                 quote_token_program: anchor_spl::token::ID,
                 system_program: solana_sdk::system_program::ID,
@@ -53,6 +57,8 @@ impl MarketFixture {
                 params: InitializeParams {
                     base_mint: base_mint.mint,
                     quote_mint: quote_mint.mint,
+                    base_lot_size: 1_000_000, // 1.0 base token
+                    quote_tick_size: 1_000,   // 0.001 quote token
                 },
             }
             .data(),
@@ -165,4 +171,12 @@ pub fn get_user_balance_pda(user: &Pubkey, market: &Pubkey) -> (Pubkey, u8) {
 
 pub fn get_vault_pda(market: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[b"vault", market.as_ref(), mint.as_ref()], &clob::ID)
+}
+
+pub fn get_bids_book_pda(market: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"bids", market.as_ref()], &clob::ID)
+}
+
+pub fn get_asks_book_pda(market: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"asks", market.as_ref()], &clob::ID)
 }

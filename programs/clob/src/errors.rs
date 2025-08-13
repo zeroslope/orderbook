@@ -14,4 +14,6 @@ pub enum ErrorCode {
     SameMintAddresses,
     #[msg("Invalid amount")]
     InvalidAmount,
+    #[msg("Invalid parameter")]
+    InvalidParameter,
 }

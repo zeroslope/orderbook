@@ -10,7 +10,7 @@ use instructions::*;
 declare_id!("FpTyzdMqQS4NWM149ryMWq74waAoHXMBpJnXb4yUNV1F");
 
 #[program]
-pub mod orderbook {
+pub mod clob {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>, params: InitializeParams) -> Result<()> {
@@ -27,5 +27,13 @@ pub mod orderbook {
 
     pub fn close_user_balance(ctx: Context<CloseUserBalance>) -> Result<()> {
         CloseUserBalance::apply(ctx)
+    }
+
+    pub fn place_limit_order(ctx: Context<PlaceLimitOrder>, params: PlaceLimitOrderParams) -> Result<()> {
+        PlaceLimitOrder::apply(ctx, params)
+    }
+
+    pub fn cancel_order(ctx: Context<CancelOrder>, params: CancelOrderParams) -> Result<()> {
+        CancelOrder::apply(ctx, params)
     }
 }

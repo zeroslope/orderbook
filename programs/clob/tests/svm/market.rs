@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::InstructionData;
+use clob::instructions::*;
 use litesvm::types::TransactionResult;
-use orderbook::instructions::*;
 use solana_sdk::signature::{Keypair, Signer};
 use std::{cell::RefCell, rc::Rc};
 
@@ -28,7 +28,7 @@ impl MarketFixture {
 
         let (market, _) = Pubkey::find_program_address(
             &[b"market", base_mint.mint.as_ref(), quote_mint.mint.as_ref()],
-            &orderbook::ID,
+            &clob::ID,
         );
 
         let (base_vault, _) = get_vault_pda(&market, &base_mint.mint);
@@ -36,8 +36,8 @@ impl MarketFixture {
 
         let authority = ctx.payer.pubkey();
         let ix = Instruction {
-            program_id: orderbook::ID,
-            accounts: orderbook::accounts::Initialize {
+            program_id: clob::ID,
+            accounts: clob::accounts::Initialize {
                 authority,
                 market,
                 base_vault,
@@ -49,7 +49,7 @@ impl MarketFixture {
                 system_program: solana_sdk::system_program::ID,
             }
             .to_account_metas(None),
-            data: orderbook::instruction::Initialize {
+            data: clob::instruction::Initialize {
                 params: InitializeParams {
                     base_mint: base_mint.mint,
                     quote_mint: quote_mint.mint,
@@ -83,8 +83,8 @@ impl MarketFixture {
         let (user_balance_pda, _) = get_user_balance_pda(&user.pubkey(), &self.market);
         let (vault_token_account, _) = get_vault_pda(&self.market, &mint);
         let ix = Instruction {
-            program_id: orderbook::ID,
-            accounts: orderbook::accounts::Deposit {
+            program_id: clob::ID,
+            accounts: clob::accounts::Deposit {
                 user: user.pubkey(),
                 market: self.market,
                 user_balance: user_balance_pda,
@@ -95,7 +95,7 @@ impl MarketFixture {
                 system_program: solana_sdk::system_program::ID,
             }
             .to_account_metas(None),
-            data: orderbook::instruction::Deposit {
+            data: clob::instruction::Deposit {
                 params: DepositParams { amount },
             }
             .data(),
@@ -116,8 +116,8 @@ impl MarketFixture {
         let (user_balance_pda, _) = get_user_balance_pda(&user.pubkey(), &self.market);
         let (vault_token_account, _) = get_vault_pda(&self.market, &mint);
         let ix = Instruction {
-            program_id: orderbook::ID,
-            accounts: orderbook::accounts::Withdraw {
+            program_id: clob::ID,
+            accounts: clob::accounts::Withdraw {
                 user: user.pubkey(),
                 market: self.market,
                 user_balance: user_balance_pda,
@@ -127,7 +127,7 @@ impl MarketFixture {
                 token_program: anchor_spl::token::ID,
             }
             .to_account_metas(None),
-            data: orderbook::instruction::Withdraw {
+            data: clob::instruction::Withdraw {
                 params: WithdrawParams { amount },
             }
             .data(),
@@ -142,14 +142,14 @@ impl MarketFixture {
         let (user_balance_pda, _) = get_user_balance_pda(&user.pubkey(), &self.market);
 
         let ix = Instruction {
-            program_id: orderbook::ID,
-            accounts: orderbook::accounts::CloseUserBalance {
+            program_id: clob::ID,
+            accounts: clob::accounts::CloseUserBalance {
                 market: self.market,
                 user_balance: user_balance_pda,
                 user: user.pubkey(),
             }
             .to_account_metas(None),
-            data: orderbook::instruction::CloseUserBalance {}.data(),
+            data: clob::instruction::CloseUserBalance {}.data(),
         };
 
         ctx.submit_transaction(&[ix], &[user])
@@ -159,10 +159,10 @@ impl MarketFixture {
 pub fn get_user_balance_pda(user: &Pubkey, market: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[b"user_balance", user.as_ref(), market.as_ref()],
-        &orderbook::ID,
+        &clob::ID,
     )
 }
 
 pub fn get_vault_pda(market: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[b"vault", market.as_ref(), mint.as_ref()], &orderbook::ID)
+    Pubkey::find_program_address(&[b"vault", market.as_ref(), mint.as_ref()], &clob::ID)
 }

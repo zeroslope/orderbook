@@ -12,8 +12,8 @@ impl TestFixture {
     pub async fn new() -> Self {
         let mut ctx = SvmContext::new();
         ctx.svm
-            .add_program_from_file(orderbook::ID, "../../target/deploy/orderbook.so")
-            .expect("Failed to add orderbook program");
+            .add_program_from_file(clob::ID, "../../target/deploy/clob.so")
+            .expect("Failed to add clob program");
 
         let ctx = Rc::new(RefCell::new(ctx));
 

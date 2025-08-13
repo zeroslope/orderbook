@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::InstructionData;
 use clob::instructions::*;
+use clob::state::Side;
 use litesvm::types::TransactionResult;
 use solana_sdk::signature::{Keypair, Signer};
 use std::{cell::RefCell, rc::Rc};
@@ -15,6 +16,8 @@ pub struct MarketFixture {
     pub quote_mint: Pubkey,
     pub base_vault: Pubkey,
     pub quote_vault: Pubkey,
+    pub bids_book: Pubkey,
+    pub asks_book: Pubkey,
 }
 
 impl MarketFixture {
@@ -74,6 +77,8 @@ impl MarketFixture {
             quote_mint: quote_mint.mint,
             base_vault,
             quote_vault,
+            bids_book,
+            asks_book,
         }
     }
 
@@ -156,6 +161,73 @@ impl MarketFixture {
             }
             .to_account_metas(None),
             data: clob::instruction::CloseUserBalance {}.data(),
+        };
+
+        ctx.submit_transaction(&[ix], &[user])
+    }
+
+    pub async fn place_limit_order(
+        &self,
+        user: &Keypair,
+        side: Side,
+        price: u64,
+        quantity: u64,
+    ) -> TransactionResult {
+        let mut ctx = self.ctx.borrow_mut();
+
+        let (user_balance_pda, _) = get_user_balance_pda(&user.pubkey(), &self.market);
+
+        let ix = Instruction {
+            program_id: clob::ID,
+            accounts: clob::accounts::PlaceLimitOrder {
+                market: self.market,
+                bids_book: self.bids_book,
+                asks_book: self.asks_book,
+                user_balance: user_balance_pda,
+                base_vault: self.base_vault,
+                quote_vault: self.quote_vault,
+                user: user.pubkey(),
+                base_token_program: anchor_spl::token::ID,
+                quote_token_program: anchor_spl::token::ID,
+            }
+            .to_account_metas(None),
+            data: clob::instruction::PlaceLimitOrder {
+                params: PlaceLimitOrderParams {
+                    side,
+                    price,
+                    quantity,
+                },
+            }
+            .data(),
+        };
+
+        ctx.submit_transaction(&[ix], &[user])
+    }
+
+    pub async fn cancel_order(
+        &self,
+        user: &Keypair,
+        order_id: u64,
+        side: Side,
+    ) -> TransactionResult {
+        let mut ctx = self.ctx.borrow_mut();
+
+        let (user_balance_pda, _) = get_user_balance_pda(&user.pubkey(), &self.market);
+
+        let ix = Instruction {
+            program_id: clob::ID,
+            accounts: clob::accounts::CancelOrder {
+                market: self.market,
+                bids_book: self.bids_book,
+                asks_book: self.asks_book,
+                user_balance: user_balance_pda,
+                user: user.pubkey(),
+            }
+            .to_account_metas(None),
+            data: clob::instruction::CancelOrder {
+                params: CancelOrderParams { order_id, side },
+            }
+            .data(),
         };
 
         ctx.submit_transaction(&[ix], &[user])

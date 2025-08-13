@@ -1,6 +1,6 @@
 use crate::errors::ErrorCode;
-use crate::events::{OrderPlaced, OrderFilled};
-use crate::state::{Market, BookSide, UserBalance, Order, Side, OrderBook};
+use crate::events::{OrderFilled, OrderPlaced};
+use crate::state::{BookSide, Market, Order, OrderBook, Side, UserBalance};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{TokenAccount, TokenInterface};
 
@@ -57,9 +57,9 @@ pub struct PlaceLimitOrder<'info> {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct PlaceLimitOrderParams {
-    pub side: Side,        // Buy or Sell
-    pub price: u64,        // Price in quote_tick_size units
-    pub quantity: u64,     // Quantity in base_lot_size units
+    pub side: Side,    // Buy or Sell
+    pub price: u64,    // Price in quote_tick_size units
+    pub quantity: u64, // Quantity in base_lot_size units
 }
 
 impl PlaceLimitOrder<'_> {
@@ -67,7 +67,7 @@ impl PlaceLimitOrder<'_> {
         // Enhanced parameter validation
         require!(params.price > 0, ErrorCode::InvalidPrice);
         require!(params.quantity > 0, ErrorCode::InvalidOrderSize);
-        
+
         // Check if orderbook has space for new order (if not fully matched)
         let orderbook_len = match params.side {
             Side::Bid => ctx.accounts.bids_book.orderbook.len(),
@@ -81,24 +81,26 @@ impl PlaceLimitOrder<'_> {
         // Check if user has sufficient balance
         match params.side {
             Side::Bid => {
-                let required_quote = params.price
+                let required_quote = params
+                    .price
                     .checked_mul(params.quantity)
                     .ok_or(ErrorCode::MathOverflow)?
                     .checked_mul(market.quote_tick_size)
                     .ok_or(ErrorCode::MathOverflow)?
                     .checked_div(market.base_lot_size)
                     .ok_or(ErrorCode::MathOverflow)?;
-                
+
                 require!(
                     user_balance.quote_balance >= required_quote,
                     ErrorCode::InsufficientBalance
                 );
             }
             Side::Ask => {
-                let required_base = params.quantity
+                let required_base = params
+                    .quantity
                     .checked_mul(market.base_lot_size)
                     .ok_or(ErrorCode::MathOverflow)?;
-                
+
                 require!(
                     user_balance.base_balance >= required_base,
                     ErrorCode::InsufficientBalance
@@ -117,7 +119,8 @@ impl PlaceLimitOrder<'_> {
         };
 
         // Increment order ID counter
-        market.next_order_id = market.next_order_id
+        market.next_order_id = market
+            .next_order_id
             .checked_add(1)
             .ok_or(ErrorCode::MathOverflow)?;
 
@@ -125,21 +128,29 @@ impl PlaceLimitOrder<'_> {
         let fills = match params.side {
             Side::Bid => {
                 // Bid order matches against asks
-                ctx.accounts.asks_book.orderbook.match_orders(&mut new_order)?
+                ctx.accounts
+                    .asks_book
+                    .orderbook
+                    .match_orders(&mut new_order)?
             }
             Side::Ask => {
                 // Ask order matches against bids
-                ctx.accounts.bids_book.orderbook.match_orders(&mut new_order)?
+                ctx.accounts
+                    .bids_book
+                    .orderbook
+                    .match_orders(&mut new_order)?
             }
         };
 
         // Process fills and update balances
         for fill in fills.iter() {
-            let fill_base_amount = fill.quantity
+            let fill_base_amount = fill
+                .quantity
                 .checked_mul(market.base_lot_size)
                 .ok_or(ErrorCode::MathOverflow)?;
-            
-            let fill_quote_amount = fill.price
+
+            let fill_quote_amount = fill
+                .price
                 .checked_mul(fill.quantity)
                 .ok_or(ErrorCode::MathOverflow)?
                 .checked_mul(market.quote_tick_size)
@@ -150,21 +161,25 @@ impl PlaceLimitOrder<'_> {
             match params.side {
                 Side::Bid => {
                     // User is bidding: receive base, pay quote
-                    user_balance.base_balance = user_balance.base_balance
+                    user_balance.base_balance = user_balance
+                        .base_balance
                         .checked_add(fill_base_amount)
                         .ok_or(ErrorCode::MathOverflow)?;
-                    
-                    user_balance.quote_balance = user_balance.quote_balance
+
+                    user_balance.quote_balance = user_balance
+                        .quote_balance
                         .checked_sub(fill_quote_amount)
                         .ok_or(ErrorCode::InsufficientBalance)?;
                 }
                 Side::Ask => {
                     // User is asking: pay base, receive quote
-                    user_balance.base_balance = user_balance.base_balance
+                    user_balance.base_balance = user_balance
+                        .base_balance
                         .checked_sub(fill_base_amount)
                         .ok_or(ErrorCode::InsufficientBalance)?;
-                    
-                    user_balance.quote_balance = user_balance.quote_balance
+
+                    user_balance.quote_balance = user_balance
+                        .quote_balance
                         .checked_add(fill_quote_amount)
                         .ok_or(ErrorCode::MathOverflow)?;
                 }
@@ -195,30 +210,40 @@ impl PlaceLimitOrder<'_> {
             // Reserve required balance for the remaining order
             match params.side {
                 Side::Bid => {
-                    let required_quote = new_order.price
+                    let required_quote = new_order
+                        .price
                         .checked_mul(new_order.remaining_quantity)
                         .ok_or(ErrorCode::MathOverflow)?
                         .checked_mul(market.quote_tick_size)
                         .ok_or(ErrorCode::MathOverflow)?
                         .checked_div(market.base_lot_size)
                         .ok_or(ErrorCode::MathOverflow)?;
-                    
-                    user_balance.quote_balance = user_balance.quote_balance
+
+                    user_balance.quote_balance = user_balance
+                        .quote_balance
                         .checked_sub(required_quote)
                         .ok_or(ErrorCode::InsufficientBalance)?;
-                    
-                    ctx.accounts.bids_book.orderbook.insert_order(new_order.clone())?;
+
+                    ctx.accounts
+                        .bids_book
+                        .orderbook
+                        .insert_order(new_order.clone())?;
                 }
                 Side::Ask => {
-                    let required_base = new_order.remaining_quantity
+                    let required_base = new_order
+                        .remaining_quantity
                         .checked_mul(market.base_lot_size)
                         .ok_or(ErrorCode::MathOverflow)?;
-                    
-                    user_balance.base_balance = user_balance.base_balance
+
+                    user_balance.base_balance = user_balance
+                        .base_balance
                         .checked_sub(required_base)
                         .ok_or(ErrorCode::InsufficientBalance)?;
-                    
-                    ctx.accounts.asks_book.orderbook.insert_order(new_order.clone())?;
+
+                    ctx.accounts
+                        .asks_book
+                        .orderbook
+                        .insert_order(new_order.clone())?;
                 }
             }
 

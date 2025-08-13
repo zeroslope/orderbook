@@ -1,5 +1,5 @@
-use anchor_lang::prelude::*;
 use crate::state::orderbook::order::Side;
+use anchor_lang::prelude::*;
 
 #[event]
 pub struct OrderPlaced {

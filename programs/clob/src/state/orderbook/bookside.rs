@@ -1,13 +1,10 @@
+use super::{order::Side, vec_orderbook::VecOrderBook};
 use anchor_lang::prelude::*;
-use super::{
-    order::Side,
-    vec_orderbook::VecOrderBook,
-};
 
 #[account]
 pub struct BookSide {
-    pub market: Pubkey,              // Associated market
-    pub orderbook: VecOrderBook,     // Orders for this side
+    pub market: Pubkey,          // Associated market
+    pub orderbook: VecOrderBook, // Orders for this side
     pub bump: u8,
 }
 

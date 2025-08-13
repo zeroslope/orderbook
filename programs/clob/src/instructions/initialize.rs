@@ -1,6 +1,6 @@
 use crate::errors::ErrorCode;
 use crate::events::MarketInitialized;
-use crate::state::{Market, BookSide, VecOrderBook, Side};
+use crate::state::{BookSide, Market, Side, VecOrderBook};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
@@ -71,8 +71,8 @@ pub struct Initialize<'info> {
 pub struct InitializeParams {
     pub base_mint: Pubkey,
     pub quote_mint: Pubkey,
-    pub base_lot_size: u64,     // Minimum base asset unit size
-    pub quote_tick_size: u64,   // Minimum quote asset price tick size
+    pub base_lot_size: u64,   // Minimum base asset unit size
+    pub quote_tick_size: u64, // Minimum quote asset price tick size
 }
 
 impl Initialize<'_> {

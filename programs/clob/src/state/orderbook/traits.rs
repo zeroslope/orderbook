@@ -1,5 +1,5 @@
+use super::order::{Fill, Order};
 use anchor_lang::prelude::*;
-use super::order::{Order, Fill};
 
 // Abstract OrderBook trait for different implementations
 pub trait OrderBook {

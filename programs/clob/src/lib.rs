@@ -31,7 +31,10 @@ pub mod clob {
         CloseUserBalance::apply(ctx)
     }
 
-    pub fn place_limit_order(ctx: Context<PlaceLimitOrder>, params: PlaceLimitOrderParams) -> Result<()> {
+    pub fn place_limit_order(
+        ctx: Context<PlaceLimitOrder>,
+        params: PlaceLimitOrderParams,
+    ) -> Result<()> {
         PlaceLimitOrder::apply(ctx, params)
     }
 

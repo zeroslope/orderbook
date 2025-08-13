@@ -1,13 +1,13 @@
-use anchor_lang::prelude::*;
 use super::{
-    order::{Order, Side, Fill},
+    order::{Fill, Order, Side},
     traits::OrderBook,
 };
+use anchor_lang::prelude::*;
 
 // Vec-based implementation for initial version
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, InitSpace)]
 pub struct VecOrderBook {
-    #[max_len(50)]  // Maximum 50 orders for initial implementation
+    #[max_len(50)] // Maximum 50 orders for initial implementation
     pub orders: Vec<Order>,
     pub side: Side, // Bid or Ask
 }
@@ -50,7 +50,11 @@ impl OrderBook for VecOrderBook {
     }
 
     fn remove_order(&mut self, order_id: u64) -> Result<Option<Order>> {
-        if let Some(pos) = self.orders.iter().position(|order| order.order_id == order_id) {
+        if let Some(pos) = self
+            .orders
+            .iter()
+            .position(|order| order.order_id == order_id)
+        {
             Ok(Some(self.orders.remove(pos)))
         } else {
             Ok(None)
@@ -83,7 +87,9 @@ impl OrderBook for VecOrderBook {
             }
 
             // Calculate fill quantity
-            let fill_quantity = existing_order.remaining_quantity.min(incoming_order.remaining_quantity);
+            let fill_quantity = existing_order
+                .remaining_quantity
+                .min(incoming_order.remaining_quantity);
 
             // Create fill record
             let fill = Fill {

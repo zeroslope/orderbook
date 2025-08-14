@@ -21,6 +21,7 @@ pub struct OrderFilled {
     pub quantity: u64,
     pub maker_owner: Pubkey,
     pub taker_owner: Pubkey,
+    pub taker_side: Side,
 }
 
 #[event]

@@ -1,6 +1,8 @@
 use crate::errors::ErrorCode;
 use crate::events::{OrderFilled, OrderPlaced};
-use crate::state::{AskSide, BidSide, Market, Order, OrderBook, Side, UserBalance};
+use crate::state::{
+    AskSide, BidSide, EventQueue, FillEvent, Market, Order, OrderBook, Side, UserBalance,
+};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{TokenAccount, TokenInterface};
 
@@ -13,6 +15,7 @@ pub struct PlaceLimitOrder<'info> {
         bump = market.bump,
         has_one = bids,
         has_one = asks,
+        has_one = event_queue,
     )]
     pub market: Account<'info, Market>,
 
@@ -20,6 +23,8 @@ pub struct PlaceLimitOrder<'info> {
     pub bids: AccountLoader<'info, BidSide>,
     #[account(mut)]
     pub asks: AccountLoader<'info, AskSide>,
+    #[account(mut)]
+    pub event_queue: AccountLoader<'info, EventQueue>,
 
     #[account(
         mut,
@@ -61,12 +66,6 @@ impl PlaceLimitOrder<'_> {
 
         let mut asks = ctx.accounts.asks.load_mut()?;
         let mut bids = ctx.accounts.bids.load_mut()?;
-
-        // Check if orderbook has space for new order (if not fully matched)
-        let orderbook_len = match params.side {
-            Side::Bid => bids.orderbook.len(),
-            Side::Ask => asks.orderbook.len(),
-        };
 
         let market = &mut ctx.accounts.market;
         let user_balance = &mut ctx.accounts.user_balance;
@@ -123,7 +122,7 @@ impl PlaceLimitOrder<'_> {
             Side::Ask => bids.orderbook.match_orders(&mut new_order)?,
         };
 
-        // Process fills and update balances
+        // Process fills: update taker balance immediately, queue events for maker balance updates
         for fill in fills.iter() {
             let fill_base_amount = fill
                 .quantity
@@ -139,9 +138,10 @@ impl PlaceLimitOrder<'_> {
                 .checked_div(market.base_lot_size)
                 .ok_or(ErrorCode::MathOverflow)?;
 
+            // 1. Immediately update taker balance
             match params.side {
                 Side::Bid => {
-                    // User is bidding: receive base, pay quote
+                    // Taker is bidding: receive base, pay quote
                     user_balance.base_balance = user_balance
                         .base_balance
                         .checked_add(fill_base_amount)
@@ -153,7 +153,7 @@ impl PlaceLimitOrder<'_> {
                         .ok_or(ErrorCode::InsufficientBalance)?;
                 }
                 Side::Ask => {
-                    // User is asking: pay base, receive quote
+                    // Taker is asking: pay base, receive quote
                     user_balance.base_balance = user_balance
                         .base_balance
                         .checked_sub(fill_base_amount)
@@ -166,24 +166,36 @@ impl PlaceLimitOrder<'_> {
                 }
             }
 
-            // Emit fill event
+            // 2. Push fill event to queue for maker balance processing
+            let mut event_queue = ctx.accounts.event_queue.load_mut()?;
+            let fill_event = FillEvent {
+                maker_order_id: fill.maker_order_id,
+                taker_order_id: fill.taker_order_id,
+                price: fill.price,
+                quantity: fill.quantity,
+                timestamp: Clock::get()?.unix_timestamp,
+                maker_owner: fill.maker_owner,
+                taker_owner: ctx.accounts.user.key(),
+                market: market.key(),
+                maker_side: match fill.maker_side {
+                    Side::Bid => 0,
+                    Side::Ask => 1,
+                },
+                _padding: [0; 7],
+            };
+            event_queue.push_event(fill_event)?;
+
+            // 3. Emit fill event
             emit!(OrderFilled {
                 maker_order_id: fill.maker_order_id,
                 taker_order_id: fill.taker_order_id,
                 market: market.key(),
                 price: fill.price,
                 quantity: fill.quantity,
-                maker_owner: Pubkey::default(), // We'll need to store this in the future
+                maker_owner: fill.maker_owner,
                 taker_owner: ctx.accounts.user.key(),
+                taker_side: params.side,
             });
-
-            msg!(
-                "Order filled: maker_id={}, taker_id={}, price={}, quantity={}",
-                fill.maker_order_id,
-                fill.taker_order_id,
-                fill.price,
-                fill.quantity
-            );
         }
 
         // If order still has remaining quantity, add to appropriate orderbook
@@ -205,7 +217,7 @@ impl PlaceLimitOrder<'_> {
                         .checked_sub(required_quote)
                         .ok_or(ErrorCode::InsufficientBalance)?;
 
-                    bids.orderbook.insert_order(new_order.clone())?;
+                    bids.orderbook.insert_order(new_order)?;
                 }
                 Side::Ask => {
                     let required_base = new_order
@@ -218,7 +230,7 @@ impl PlaceLimitOrder<'_> {
                         .checked_sub(required_base)
                         .ok_or(ErrorCode::InsufficientBalance)?;
 
-                    asks.orderbook.insert_order(new_order.clone())?;
+                    asks.orderbook.insert_order(new_order)?;
                 }
             }
 
@@ -232,14 +244,6 @@ impl PlaceLimitOrder<'_> {
                 quantity: new_order.remaining_quantity,
                 timestamp: new_order.timestamp,
             });
-
-            msg!(
-                "Order placed: id={}, side={:?}, price={}, quantity={}",
-                new_order.order_id,
-                params.side,
-                new_order.price,
-                new_order.remaining_quantity
-            );
         }
 
         Ok(())

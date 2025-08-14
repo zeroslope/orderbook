@@ -272,6 +272,8 @@ impl<K: Kind> OrderBook for SimpleOrderBook<K> {
             let fill = Fill {
                 maker_order_id: existing_order.order_id,
                 taker_order_id: incoming_order.order_id,
+                maker_owner: existing_order.owner,
+                maker_side: K::SIDE,
                 price: existing_order.price, // Use maker price
                 quantity: fill_quantity,
             };
@@ -288,8 +290,8 @@ impl<K: Kind> OrderBook for SimpleOrderBook<K> {
         Ok(fills)
     }
 
-    fn get_order(&self, order_id: u64) -> Option<&Order> {
-        self.find(|order| order.order_id == order_id)
+    fn find_order_by_id(&self, order_id: u64) -> Option<Order> {
+        self.find(|order| order.order_id == order_id).copied()
     }
 
     fn len(&self) -> usize {

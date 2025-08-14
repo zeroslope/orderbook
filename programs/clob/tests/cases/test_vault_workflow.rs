@@ -50,7 +50,7 @@ async fn test_vault_workflow() {
         .await
     {
         Ok(_) => println!(
-            "  ✓ Deposit of {} base tokens succeeded",
+            "Deposit of {} base tokens succeeded",
             deposit_amount / 1_000_000
         ),
         Err(_) => panic!("Expected deposit to succeed"),
@@ -67,7 +67,7 @@ async fn test_vault_workflow() {
         .await
     {
         Ok(_) => println!(
-            "  ✓ Deposit of {} quote tokens succeeded",
+            "Deposit of {} quote tokens succeeded",
             deposit_amount / 1_000_000
         ),
         Err(_) => panic!("Expected deposit to succeed"),
@@ -91,7 +91,7 @@ async fn test_vault_workflow() {
     {
         Ok(_) => panic!("Expected deposit to fail"),
         Err(_) => println!(
-            "  ✓ Deposit of {} tokens failed as expected",
+            "Deposit of {} tokens failed as expected",
             excessive_amount / 1_000_000
         ),
     }
@@ -116,7 +116,7 @@ async fn test_vault_workflow() {
         .await
     {
         Ok(_) => println!(
-            "  ✓ Withdraw of {} base tokens succeeded",
+            "Withdraw of {} base tokens succeeded",
             withdraw_amount / 1_000_000
         ),
         Err(err) => panic!("Expected withdraw to succeed: {:?}", err),
@@ -140,7 +140,7 @@ async fn test_vault_workflow() {
     {
         Ok(_) => panic!("Expected withdraw to fail"),
         Err(_) => println!(
-            "  ✓ Withdraw of {} tokens failed as expected",
+            "Withdraw of {} tokens failed as expected",
             excessive_withdraw / 1_000_000
         ),
     }
@@ -152,7 +152,7 @@ async fn test_vault_workflow() {
     println!("Testing close user balance with non-zero balance (should fail)");
     match market.close_user_balance(&user).await {
         Ok(_) => panic!("Expected close to fail with non-zero balance"),
-        Err(_) => println!("  ✓ Close user balance failed as expected"),
+        Err(_) => println!("Close user balance failed as expected"),
     }
 
     // Withdraw remaining balances to make them zero
@@ -171,7 +171,7 @@ async fn test_vault_workflow() {
         .await
     {
         Ok(_) => println!(
-            "  ✓ Withdraw remaining {} base tokens succeeded",
+            "Withdraw remaining {} base tokens succeeded",
             remaining_base / 1_000_000
         ),
         Err(err) => panic!("Expected withdraw to succeed: {:?}", err),
@@ -187,7 +187,7 @@ async fn test_vault_workflow() {
         .await
     {
         Ok(_) => println!(
-            "  ✓ Withdraw remaining {} quote tokens succeeded",
+            "Withdraw remaining {} quote tokens succeeded",
             remaining_quote / 1_000_000
         ),
         Err(err) => panic!("Expected withdraw to succeed: {:?}", err),
@@ -196,7 +196,7 @@ async fn test_vault_workflow() {
     // Test close with zero balance (should succeed)
     println!("Testing close user balance with zero balance (should succeed)");
     match market.close_user_balance(&user).await {
-        Ok(_) => println!("  ✓ Close user balance succeeded"),
+        Ok(_) => println!("Close user balance succeeded"),
         Err(err) => panic!("Expected close to succeed: {:?}", err),
     }
 

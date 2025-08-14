@@ -41,4 +41,8 @@ pub mod clob {
     pub fn cancel_order(ctx: Context<CancelOrder>, params: CancelOrderParams) -> Result<()> {
         CancelOrder::apply(ctx, params)
     }
+
+    pub fn consume_events(ctx: Context<ConsumeEvents>, params: ConsumeEventsParams) -> Result<()> {
+        ConsumeEvents::apply(ctx, params)
+    }
 }

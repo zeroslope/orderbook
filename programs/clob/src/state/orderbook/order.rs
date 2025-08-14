@@ -51,6 +51,8 @@ pub enum Side {
 pub struct Fill {
     pub maker_order_id: u64,
     pub taker_order_id: u64,
+    pub maker_owner: Pubkey,
+    pub maker_side: Side,
     pub price: u64,
     pub quantity: u64,
 }

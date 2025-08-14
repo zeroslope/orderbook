@@ -24,8 +24,12 @@ pub enum ErrorCode {
     InvalidOrderSize,
     #[msg("Invalid price")]
     InvalidPrice,
-    #[msg("Market closed")]
-    MarketClosed,
-    #[msg("Slippage exceeded")]
-    SlippageExceeded,
+    #[msg("Event queue is full")]
+    EventQueueFull,
+    #[msg("Event queue is empty")]
+    EventQueueEmpty,
+    #[msg("Maker balance account not found")]
+    MakerBalanceNotFound,
+    #[msg("Invalid account")]
+    InvalidAccount,
 }

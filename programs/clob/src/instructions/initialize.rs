@@ -1,6 +1,6 @@
 use crate::errors::ErrorCode;
 use crate::events::MarketInitialized;
-use crate::state::{AskSide, BidSide, Market};
+use crate::state::{AskSide, BidSide, EventQueue, Market, MAX_EVENTS};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
@@ -48,6 +48,8 @@ pub struct Initialize<'info> {
     pub bids: AccountLoader<'info, BidSide>,
     #[account(zero)]
     pub asks: AccountLoader<'info, AskSide>,
+    #[account(zero)]
+    pub event_queue: AccountLoader<'info, EventQueue>,
 
     pub base_token_program: Interface<'info, TokenInterface>,
     pub quote_token_program: Interface<'info, TokenInterface>,
@@ -78,6 +80,11 @@ impl Initialize<'_> {
         let _bids = &mut ctx.accounts.bids.load_init()?;
         // Initialize asks book
         let _asks = &mut ctx.accounts.asks.load_init()?;
+        // Initialize event queue
+        let event_queue = &mut ctx.accounts.event_queue.load_init()?;
+        event_queue.head = 0;
+        event_queue.tail = 0;
+        event_queue.capacity = MAX_EVENTS as u64;
 
         let market = &mut ctx.accounts.market;
         market.authority = ctx.accounts.authority.key();
@@ -87,12 +94,12 @@ impl Initialize<'_> {
         market.quote_vault = ctx.accounts.quote_vault.key();
         market.asks = ctx.accounts.asks.key();
         market.bids = ctx.accounts.bids.key();
+        market.event_queue = ctx.accounts.event_queue.key();
         market.base_lot_size = params.base_lot_size;
         market.quote_tick_size = params.quote_tick_size;
         market.next_order_id = 1; // Start order IDs from 1
         market.bump = ctx.bumps.market;
 
-        // Emit market initialized event
         emit!(MarketInitialized {
             market: market.key(),
             authority: market.authority,
@@ -101,14 +108,6 @@ impl Initialize<'_> {
             base_lot_size: market.base_lot_size,
             quote_tick_size: market.quote_tick_size,
         });
-
-        msg!(
-            "Market initialized: base={}, quote={}, bids={}, asks={}",
-            params.base_mint,
-            params.quote_mint,
-            ctx.accounts.bids.key(),
-            ctx.accounts.asks.key()
-        );
 
         Ok(())
     }

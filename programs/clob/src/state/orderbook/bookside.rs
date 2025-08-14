@@ -1,23 +1,16 @@
-use super::{order::Side, vec_orderbook::VecOrderBook};
+use super::heap_orderbook::{AskOrderBook, BidOrderBook};
 use anchor_lang::prelude::*;
 
-#[account]
-pub struct BookSide {
-    pub market: Pubkey,          // Associated market
-    pub orderbook: VecOrderBook, // Orders for this side
-    pub bump: u8,
+#[account(zero_copy)]
+#[derive(Default)]
+#[repr(C)]
+pub struct AskSide {
+    pub orderbook: AskOrderBook,
 }
 
-impl anchor_lang::Space for BookSide {
-    const INIT_SPACE: usize = 32 + VecOrderBook::INIT_SPACE + 1; // market + orderbook + bump
-}
-
-impl BookSide {
-    pub fn new(market: Pubkey, side: Side, bump: u8) -> Self {
-        Self {
-            market,
-            orderbook: VecOrderBook::new(side),
-            bump,
-        }
-    }
+#[account(zero_copy)]
+#[derive(Default)]
+#[repr(C)]
+pub struct BidSide {
+    pub orderbook: BidOrderBook,
 }

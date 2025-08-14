@@ -5,6 +5,7 @@ use clob::instructions::*;
 use clob::state::Side;
 use litesvm::types::TransactionResult;
 use solana_sdk::signature::{Keypair, Signer};
+use solana_sdk::system_instruction::create_account;
 use std::{cell::RefCell, rc::Rc};
 
 use super::{spl::MintFixture, SvmContext};
@@ -16,8 +17,8 @@ pub struct MarketFixture {
     pub quote_mint: Pubkey,
     pub base_vault: Pubkey,
     pub quote_vault: Pubkey,
-    pub bids_book: Pubkey,
-    pub asks_book: Pubkey,
+    pub bids: Pubkey,
+    pub asks: Pubkey,
 }
 
 impl MarketFixture {
@@ -36,11 +37,45 @@ impl MarketFixture {
 
         let (base_vault, _) = get_vault_pda(&market, &base_mint.mint);
         let (quote_vault, _) = get_vault_pda(&market, &quote_mint.mint);
-        let (bids_book, _) = get_bids_book_pda(&market);
-        let (asks_book, _) = get_asks_book_pda(&market);
 
         let authority = ctx.payer.pubkey();
-        let ix = Instruction {
+
+        // Step 1: Create bids and asks accounts manually using fresh keypairs
+        let bids_keypair = Keypair::new();
+        let asks_keypair = Keypair::new();
+
+        let bids_size = 8 + std::mem::size_of::<clob::state::BidSide>();
+        let asks_size = 8 + std::mem::size_of::<clob::state::AskSide>();
+        let rent = ctx.minimum_balance_for_rent_exemption(bids_size);
+
+        let create_bids_ix = create_account(
+            &authority,
+            &bids_keypair.pubkey(),
+            rent,
+            bids_size as u64,
+            &clob::ID,
+        );
+
+        let create_asks_ix = create_account(
+            &authority,
+            &asks_keypair.pubkey(),
+            rent,
+            asks_size as u64,
+            &clob::ID,
+        );
+
+        ctx.submit_transaction(
+            &[create_bids_ix, create_asks_ix],
+            &[&bids_keypair, &asks_keypair],
+        )
+        .expect("Failed to create orderbook accounts");
+
+        // Update the addresses to use the created accounts
+        let bids = bids_keypair.pubkey();
+        let asks = asks_keypair.pubkey();
+
+        // Step 2: Initialize market (with order books)
+        let init_ix = Instruction {
             program_id: clob::ID,
             accounts: clob::accounts::Initialize {
                 authority,
@@ -49,8 +84,8 @@ impl MarketFixture {
                 quote_vault,
                 base_mint: base_mint.mint,
                 quote_mint: quote_mint.mint,
-                bids_book,
-                asks_book,
+                bids,
+                asks,
                 base_token_program: anchor_spl::token::ID,
                 quote_token_program: anchor_spl::token::ID,
                 system_program: solana_sdk::system_program::ID,
@@ -67,7 +102,7 @@ impl MarketFixture {
             .data(),
         };
 
-        ctx.submit_transaction(&[ix], &[])
+        ctx.submit_transaction(&[init_ix], &[])
             .expect("Failed to initialize market");
 
         Self {
@@ -77,8 +112,8 @@ impl MarketFixture {
             quote_mint: quote_mint.mint,
             base_vault,
             quote_vault,
-            bids_book,
-            asks_book,
+            bids,
+            asks,
         }
     }
 
@@ -181,8 +216,8 @@ impl MarketFixture {
             program_id: clob::ID,
             accounts: clob::accounts::PlaceLimitOrder {
                 market: self.market,
-                bids_book: self.bids_book,
-                asks_book: self.asks_book,
+                bids: self.bids,
+                asks: self.asks,
                 user_balance: user_balance_pda,
                 base_vault: self.base_vault,
                 quote_vault: self.quote_vault,
@@ -218,8 +253,8 @@ impl MarketFixture {
             program_id: clob::ID,
             accounts: clob::accounts::CancelOrder {
                 market: self.market,
-                bids_book: self.bids_book,
-                asks_book: self.asks_book,
+                bids: self.bids,
+                asks: self.asks,
                 user_balance: user_balance_pda,
                 user: user.pubkey(),
             }
@@ -243,12 +278,4 @@ pub fn get_user_balance_pda(user: &Pubkey, market: &Pubkey) -> (Pubkey, u8) {
 
 pub fn get_vault_pda(market: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[b"vault", market.as_ref(), mint.as_ref()], &clob::ID)
-}
-
-pub fn get_bids_book_pda(market: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[b"bids", market.as_ref()], &clob::ID)
-}
-
-pub fn get_asks_book_pda(market: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[b"asks", market.as_ref()], &clob::ID)
 }

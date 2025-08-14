@@ -1,6 +1,6 @@
 use crate::errors::ErrorCode;
 use crate::events::{OrderFilled, OrderPlaced};
-use crate::state::{BookSide, Market, Order, OrderBook, Side, UserBalance};
+use crate::state::{AskSide, BidSide, Market, Order, OrderBook, Side, UserBalance};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{TokenAccount, TokenInterface};
 
@@ -10,25 +10,16 @@ pub struct PlaceLimitOrder<'info> {
     #[account(
         mut,
         seeds = [b"market", market.base_mint.as_ref(), market.quote_mint.as_ref()],
-        bump = market.bump
+        bump = market.bump,
+        has_one = bids,
+        has_one = asks,
     )]
     pub market: Account<'info, Market>,
 
-    #[account(
-        mut,
-        seeds = [b"bids", market.key().as_ref()],
-        bump = bids_book.bump,
-        constraint = bids_book.market == market.key() @ ErrorCode::InvalidParameter
-    )]
-    pub bids_book: Account<'info, BookSide>,
-
-    #[account(
-        mut,
-        seeds = [b"asks", market.key().as_ref()],
-        bump = asks_book.bump,
-        constraint = asks_book.market == market.key() @ ErrorCode::InvalidParameter
-    )]
-    pub asks_book: Account<'info, BookSide>,
+    #[account(mut)]
+    pub bids: AccountLoader<'info, BidSide>,
+    #[account(mut)]
+    pub asks: AccountLoader<'info, AskSide>,
 
     #[account(
         mut,
@@ -68,12 +59,14 @@ impl PlaceLimitOrder<'_> {
         require!(params.price > 0, ErrorCode::InvalidPrice);
         require!(params.quantity > 0, ErrorCode::InvalidOrderSize);
 
+        let mut asks = ctx.accounts.asks.load_mut()?;
+        let mut bids = ctx.accounts.bids.load_mut()?;
+
         // Check if orderbook has space for new order (if not fully matched)
         let orderbook_len = match params.side {
-            Side::Bid => ctx.accounts.bids_book.orderbook.len(),
-            Side::Ask => ctx.accounts.asks_book.orderbook.len(),
+            Side::Bid => bids.orderbook.len(),
+            Side::Ask => asks.orderbook.len(),
         };
-        require!(orderbook_len < 50, ErrorCode::OrderbookFull); // Max 50 orders
 
         let market = &mut ctx.accounts.market;
         let user_balance = &mut ctx.accounts.user_balance;
@@ -126,20 +119,8 @@ impl PlaceLimitOrder<'_> {
 
         // Match against opposite side orderbook
         let fills = match params.side {
-            Side::Bid => {
-                // Bid order matches against asks
-                ctx.accounts
-                    .asks_book
-                    .orderbook
-                    .match_orders(&mut new_order)?
-            }
-            Side::Ask => {
-                // Ask order matches against bids
-                ctx.accounts
-                    .bids_book
-                    .orderbook
-                    .match_orders(&mut new_order)?
-            }
+            Side::Bid => asks.orderbook.match_orders(&mut new_order)?,
+            Side::Ask => bids.orderbook.match_orders(&mut new_order)?,
         };
 
         // Process fills and update balances
@@ -224,10 +205,7 @@ impl PlaceLimitOrder<'_> {
                         .checked_sub(required_quote)
                         .ok_or(ErrorCode::InsufficientBalance)?;
 
-                    ctx.accounts
-                        .bids_book
-                        .orderbook
-                        .insert_order(new_order.clone())?;
+                    bids.orderbook.insert_order(new_order.clone())?;
                 }
                 Side::Ask => {
                     let required_base = new_order
@@ -240,10 +218,7 @@ impl PlaceLimitOrder<'_> {
                         .checked_sub(required_base)
                         .ok_or(ErrorCode::InsufficientBalance)?;
 
-                    ctx.accounts
-                        .asks_book
-                        .orderbook
-                        .insert_order(new_order.clone())?;
+                    asks.orderbook.insert_order(new_order.clone())?;
                 }
             }
 

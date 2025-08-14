@@ -36,6 +36,10 @@ impl SvmContext {
         self.svm.send_transaction(tx)
     }
 
+    pub fn minimum_balance_for_rent_exemption(&self, data_len: usize) -> u64 {
+        self.svm.minimum_balance_for_rent_exemption(data_len)
+    }
+
     pub fn clock(&self) -> Clock {
         self.svm.get_sysvar::<solana_program::clock::Clock>()
     }

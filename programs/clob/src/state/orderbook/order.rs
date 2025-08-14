@@ -1,6 +1,20 @@
 use anchor_lang::prelude::*;
+use bytemuck::{Pod, Zeroable};
 
-#[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Debug, PartialEq)]
+#[derive(
+    AnchorSerialize,
+    AnchorDeserialize,
+    InitSpace,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Default,
+    Copy,
+    Pod,
+    Zeroable,
+)]
+#[repr(C)]
 pub struct Order {
     pub order_id: u64,           // Unique order identifier
     pub owner: Pubkey,           // Order owner's public key
@@ -10,7 +24,23 @@ pub struct Order {
     pub timestamp: i64,          // Creation timestamp for price-time priority
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Copy, Debug, PartialEq)]
+impl PartialOrd for Order {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Order {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // higher price first, then earlier timestamp for price-time priority
+        match self.price.cmp(&other.price) {
+            std::cmp::Ordering::Equal => other.timestamp.cmp(&self.timestamp),
+            price_ord => price_ord,
+        }
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Side {
     Bid, // Buy orders
     Ask, // Sell orders

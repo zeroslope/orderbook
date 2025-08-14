@@ -1,6 +1,6 @@
 use crate::errors::ErrorCode;
 use crate::events::OrderCancelled;
-use crate::state::{BookSide, Market, OrderBook, Side, UserBalance};
+use crate::state::{AskSide, BidSide, Market, OrderBook, Side, UserBalance};
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
@@ -8,25 +8,16 @@ use anchor_lang::prelude::*;
 pub struct CancelOrder<'info> {
     #[account(
         seeds = [b"market", market.base_mint.as_ref(), market.quote_mint.as_ref()],
-        bump = market.bump
+        bump = market.bump,
+        has_one = bids,
+        has_one = asks,
     )]
     pub market: Account<'info, Market>,
 
-    #[account(
-        mut,
-        seeds = [b"bids", market.key().as_ref()],
-        bump = bids_book.bump,
-        constraint = bids_book.market == market.key() @ ErrorCode::InvalidParameter
-    )]
-    pub bids_book: Account<'info, BookSide>,
-
-    #[account(
-        mut,
-        seeds = [b"asks", market.key().as_ref()],
-        bump = asks_book.bump,
-        constraint = asks_book.market == market.key() @ ErrorCode::InvalidParameter
-    )]
-    pub asks_book: Account<'info, BookSide>,
+    #[account(mut)]
+    pub bids: AccountLoader<'info, BidSide>,
+    #[account(mut)]
+    pub asks: AccountLoader<'info, AskSide>,
 
     #[account(
         mut,
@@ -35,7 +26,6 @@ pub struct CancelOrder<'info> {
         constraint = user_balance.owner == user.key() @ ErrorCode::Unauthorized
     )]
     pub user_balance: Account<'info, UserBalance>,
-
     pub user: Signer<'info>,
 }
 
@@ -49,19 +39,13 @@ impl CancelOrder<'_> {
     pub fn apply(ctx: Context<CancelOrder>, params: CancelOrderParams) -> Result<()> {
         let market = &ctx.accounts.market;
         let user_balance = &mut ctx.accounts.user_balance;
+        let mut bids = ctx.accounts.bids.load_mut()?;
+        let mut asks = ctx.accounts.asks.load_mut()?;
 
         // Try to remove order from the specified orderbook
         let removed_order = match params.side {
-            Side::Bid => ctx
-                .accounts
-                .bids_book
-                .orderbook
-                .remove_order(params.order_id)?,
-            Side::Ask => ctx
-                .accounts
-                .asks_book
-                .orderbook
-                .remove_order(params.order_id)?,
+            Side::Bid => bids.orderbook.remove_order(params.order_id)?,
+            Side::Ask => asks.orderbook.remove_order(params.order_id)?,
         };
 
         let order = removed_order.ok_or(ErrorCode::OrderNotFound)?;

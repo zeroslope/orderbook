@@ -41,6 +41,9 @@ pub struct MarketInitialized {
     pub quote_mint: Pubkey,
     pub base_lot_size: u64,
     pub quote_tick_size: u64,
+    pub asks: Pubkey,
+    pub bids: Pubkey,
+    pub event_queue: Pubkey,
 }
 
 #[event]

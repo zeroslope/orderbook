@@ -107,6 +107,9 @@ impl Initialize<'_> {
             quote_mint: market.quote_mint,
             base_lot_size: market.base_lot_size,
             quote_tick_size: market.quote_tick_size,
+            asks: market.asks,
+            bids: market.bids,
+            event_queue: market.event_queue,
         });
 
         Ok(())

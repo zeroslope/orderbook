@@ -1,8 +1,9 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::clock::Clock;
 use litesvm::{types::TransactionResult, LiteSVM};
 use solana_sdk::{
-    clock::Clock, instruction::Instruction, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey,
-    signature::Keypair, signer::Signer, transaction::Transaction,
+    instruction::Instruction, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey, signature::Keypair,
+    signer::Signer, transaction::Transaction,
 };
 
 pub struct SvmContext {
@@ -41,11 +42,11 @@ impl SvmContext {
     }
 
     pub fn clock(&self) -> Clock {
-        self.svm.get_sysvar::<solana_program::clock::Clock>()
+        self.svm.get_sysvar::<Clock>()
     }
 
     pub fn set_clock(&mut self, unix_timestamp: i64) {
-        let clock = self.svm.get_sysvar::<solana_program::clock::Clock>();
+        let clock = self.svm.get_sysvar::<Clock>();
         let new_clock = Clock {
             unix_timestamp,
             ..clock

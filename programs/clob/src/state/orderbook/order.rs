@@ -46,6 +46,17 @@ pub enum Side {
     Ask, // Sell orders
 }
 
+#[derive(
+    AnchorSerialize, AnchorDeserialize, InitSpace, Clone, Copy, Debug, PartialEq, Eq, Default,
+)]
+#[repr(u8)]
+pub enum TimeInForce {
+    #[default]
+    GTC = 0, // Good-Till-Cancelled: Order remains active until explicitly cancelled
+    IOC = 1, // Immediate-Or-Cancel: Execute immediately, cancel any unfilled portion
+    FOK = 2, // Fill-Or-Kill: Either fill the entire order immediately or cancel it completely
+}
+
 // Trade execution result
 #[derive(Debug, Clone)]
 pub struct Fill {

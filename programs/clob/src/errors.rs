@@ -28,8 +28,6 @@ pub enum ErrorCode {
     EventQueueFull,
     #[msg("Event queue is empty")]
     EventQueueEmpty,
-    #[msg("Maker balance account not found")]
-    MakerBalanceNotFound,
-    #[msg("Invalid account")]
-    InvalidAccount,
+    #[msg("Fill-or-kill order not completely filled")]
+    FillOrKillNotFilled,
 }

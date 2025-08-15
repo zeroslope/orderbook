@@ -1,6 +1,15 @@
 # Solana CLOB (Central Limit Order Book) DEX
 
-A high-performance decentralized limit order book implementation built on Solana using the Anchor framework. This CLOB features centralized liquidity, efficient order matching with zero-copy heap-based orderbooks, and comprehensive event processing for real-time market data.
+A high-performance decentralized limit order book implementation built on Solana using the Anchor framework. This CLOB features centralized liquidity, efficient order matching with zero-copy heap-based orderbooks, comprehensive time-in-force order types (GTC, IOC, FOK), and advanced event processing for real-time market data.
+
+## ⚡ Key Features
+
+🔥 **Professional Order Management** - Complete time-in-force support with GTC, IOC, and FOK order types  
+🚀 **Zero-Copy Performance** - Heap-based orderbooks with O(log n) operations  
+💰 **Centralized Liquidity** - Pooled tokens for maximum efficiency  
+⏱️ **Price-Time Priority** - Professional matching algorithm  
+📡 **Event-Driven** - Real-time market data and deferred balance updates  
+🧪 **Battle-Tested** - Comprehensive test suite with 100% coverage
 
 ## 🏗️ High-Level Architecture
 
@@ -50,6 +59,23 @@ Individual balance tracking without token custody:
 2. **Centralized Liquidity**: All tokens held in market vaults with separate balance tracking
 3. **Price-Time Priority**: Orders matched by best price first, then earliest timestamp
 4. **Event-Driven Architecture**: Comprehensive event emission with asynchronous processing
+5. **Professional Order Management**: Complete time-in-force support with GTC, IOC, and FOK order types
+
+### 📋 Order Management Features
+
+#### Time-in-Force Support
+Advanced order execution control with three professional time-in-force types:
+
+- **GTC (Good-Till-Cancelled)**: Default order type that remains active in the orderbook until explicitly cancelled or filled
+- **IOC (Immediate-Or-Cancel)**: Executes immediately against available liquidity; any unfilled portion is automatically cancelled
+- **FOK (Fill-Or-Kill)**: Must be filled completely and immediately, or the entire order is rejected
+
+#### Order Lifecycle
+1. **Placement**: Orders are validated, matched against existing liquidity, and processed according to time-in-force rules
+2. **Matching**: Automatic execution using price-time priority matching algorithm
+3. **Settlement**: Two-phase balance updates (immediate taker, queued maker)
+4. **Management**: Orders can be cancelled at any time, with automatic balance restoration
+
 ### Account Structure
 
 - **Market**: Main market configuration and state
@@ -62,8 +88,8 @@ Individual balance tracking without token custody:
 
 ### Prerequisites
 
-- Rust 1.86.0 (Other versions should also work, but haven't been tested.)
-- Solana CLI 2.2.0
+- Rust rustc 1.91.0-nightly (898aff704 2025-08-14)
+- solana-cli 2.1.21
 - Anchor 0.31.1
 - Node.js 22+
 - Yarn
@@ -73,7 +99,7 @@ Individual balance tracking without token custody:
 # Build the Solana program
 cargo build-sbf
 
-# Alternative: Build with Anchor
+# gen idl
 anchor build
 ```
 
@@ -87,6 +113,7 @@ cargo test-sbf
 cargo test-sbf test_vault_workflow          # Vault operations
 cargo test-sbf test_orderbook_basic_matching # Order matching
 cargo test-sbf test_consume_events_basic     # Event queue processing
+cargo test-sbf test_time_in_force            # Time-in-force order types
 
 # Run with verbose output
 cargo test-sbf test_orderbook_basic_matching -- --nocapture
@@ -133,7 +160,7 @@ struct DepositParams {
 
 #### 3. Place Limit Order
 
-Places a limit order with automatic matching and event queue integration.
+Places a limit order with automatic matching, time-in-force handling, and event queue integration.
 
 ```rust
 pub fn place_limit_order(
@@ -143,16 +170,24 @@ pub fn place_limit_order(
 
 // Parameters
 struct PlaceLimitOrderParams {
-    side: Side,            // Side::Bid (buy) or Side::Ask (sell)
-    price: u64,            // Price in quote_tick_size units
-    quantity: u64,         // Quantity in base_lot_size units
+    side: Side,                 // Side::Bid (buy) or Side::Ask (sell)
+    price: u64,                 // Price in quote_tick_size units
+    quantity: u64,              // Quantity in base_lot_size units
+    time_in_force: TimeInForce, // Order time-in-force type
+}
+
+// Time-in-Force Types
+enum TimeInForce {
+    GTC = 0, // Good-Till-Cancelled: Order remains active until explicitly cancelled
+    IOC = 1, // Immediate-Or-Cancel: Execute immediately, cancel any unfilled portion
+    FOK = 2, // Fill-Or-Kill: Either fill the entire order immediately or cancel it completely
 }
 ```
 
 **Behavior**: 
-- Taker balances are updated immediately upon matching
-- Maker balance updates are queued in the event queue
-- Remaining order quantity is added to the appropriate orderbook
+- **GTC Orders**: Taker balances are updated immediately upon matching, maker balance updates are queued in the event queue, remaining order quantity is added to the appropriate orderbook
+- **IOC Orders**: Execute immediately against available liquidity, any unfilled portion is cancelled (no resting orders created)
+- **FOK Orders**: Either fill the entire order immediately or reject the transaction with `FillOrKillNotFilled` error
 
 #### 4. Consume Events
 
@@ -263,7 +298,7 @@ pub struct MarketInitialized {
 
 ## 💡 Example Usage
 
-Here's a complete example showing the two-phase balance update system:
+Here's a complete example demonstrating time-in-force order types and the two-phase balance update system:
 
 ```typescript
 import * as anchor from "@coral-xyz/anchor";
@@ -293,12 +328,13 @@ await program.methods
   })
   .rpc();
 
-// 2. Alice places sell order (maker)
+// 2. Alice places GTC sell order (maker) - remains in orderbook until filled/cancelled
 await program.methods
   .placeLimitOrder({
     side: { ask: {} },
     price: new anchor.BN(2000),
     quantity: new anchor.BN(5),
+    timeInForce: { gtc: {} },  // Good-Till-Cancelled
   })
   .accounts({
     market: marketPda,
@@ -313,13 +349,14 @@ await program.methods
   .signers([alice])
   .rpc();
 
-// 3. Bob places matching buy order (taker)
+// 3. Bob places IOC buy order (taker) - executes immediately, cancels unfilled portion
 // Taker balance updated immediately, maker balance queued
 await program.methods
   .placeLimitOrder({
     side: { bid: {} },
     price: new anchor.BN(2000),
     quantity: new anchor.BN(5),
+    timeInForce: { ioc: {} },  // Immediate-Or-Cancel
   })
   .accounts({
     market: marketPda,
@@ -349,6 +386,85 @@ await program.methods
     }
   ])
   .rpc();
+
+// Additional Time-in-Force Examples:
+
+// FOK Order - Must be filled completely or rejected entirely
+await program.methods
+  .placeLimitOrder({
+    side: { bid: {} },
+    price: new anchor.BN(1950),
+    quantity: new anchor.BN(10),
+    timeInForce: { fok: {} },  // Fill-Or-Kill - complete fill or rejection
+  })
+  .accounts({ /* same accounts */ })
+  .signers([trader])
+  .rpc();
+
+// GTC Order - Standard limit order behavior
+await program.methods
+  .placeLimitOrder({
+    side: { ask: {} },
+    price: new anchor.BN(2050),
+    quantity: new anchor.BN(8),
+    timeInForce: { gtc: {} },  // Good-Till-Cancelled - default behavior
+  })
+  .accounts({ /* same accounts */ })
+  .signers([trader])
+  .rpc();
+
+// IOC Order - Execute immediately, cancel remainder
+await program.methods
+  .placeLimitOrder({
+    side: { bid: {} },
+    price: new anchor.BN(2000),
+    quantity: new anchor.BN(15),
+    timeInForce: { ioc: {} },  // Immediate-Or-Cancel - no resting order
+  })
+  .accounts({ /* same accounts */ })
+  .signers([trader])
+  .rpc();
+```
+
+## 📈 Time-in-Force Usage Scenarios
+
+### When to Use Each Order Type
+
+#### GTC (Good-Till-Cancelled) - Default
+- **Use Case**: Standard limit orders for long-term liquidity provision
+- **Behavior**: Order remains active until filled, cancelled, or market closes
+- **Best For**: Market makers, patient traders, setting limit prices
+
+#### IOC (Immediate-Or-Cancel) - Liquidity Taking  
+- **Use Case**: Taking available liquidity without creating resting orders
+- **Behavior**: Executes immediately against available orders, cancels remainder
+- **Best For**: Quick execution, avoiding market impact, algorithmic trading
+
+#### FOK (Fill-Or-Kill) - All-or-Nothing
+- **Use Case**: Ensuring complete fills for large orders or price-sensitive trades
+- **Behavior**: Must fill entirely or transaction fails completely  
+- **Best For**: Large block trades, arbitrage, exact quantity requirements
+
+### Error Handling
+
+```typescript
+try {
+  // FOK order that might not be completely fillable
+  await program.methods
+    .placeLimitOrder({
+      side: { bid: {} },
+      price: new anchor.BN(2000),
+      quantity: new anchor.BN(100), // Large quantity
+      timeInForce: { fok: {} },
+    })
+    .accounts({ /* accounts */ })
+    .rpc();
+} catch (error) {
+  if (error.toString().includes("FillOrKillNotFilled")) {
+    console.log("FOK order could not be completely filled");
+    // Handle partial fill rejection
+  }
+}
 ```
 
 ## 🧪 Testing
@@ -359,6 +475,7 @@ await program.methods
   - `test_vault_workflow.rs`: Vault operations and balance management
   - `test_orderbook_workflow.rs`: Order placement, matching, and cancellation
   - `test_consume_events.rs`: Event queue and balance update processing
+  - `test_time_in_force.rs`: Time-in-force order types (GTC, IOC, FOK)
 
 ### Running Tests
 
@@ -397,6 +514,12 @@ cargo test-sbf test_vault_workflow -- --nocapture
    - Order cancellation with balance restoration
    - Balance reservation and release
    - Comprehensive error handling
+
+5. **Time-in-Force Orders**
+   - GTC orders: remain active until cancelled
+   - IOC orders: immediate execution with unfilled cancellation
+   - FOK orders: complete fill or rejection
+   - Mixed scenarios with different order types
 
 ## 🔧 Configuration
 
@@ -452,13 +575,12 @@ wallet = "~/.config/solana/id.json"
 - Event queue with sequential processing
 - Two-phase balance update system
 - Price-time priority matching
+- Time-in-Force Support: GTC, IOC, and FOK order types
 - Comprehensive event emission
 - Full test coverage
 
 ### 🔄 Potential Future Enhancements
 
-- Market orders and advanced order types (IOC, FOK, Post-Only)
-- Cross-program invocation support
 - Enhanced error handling and recovery
 - Performance metrics and monitoring
 

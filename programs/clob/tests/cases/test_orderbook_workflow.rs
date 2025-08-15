@@ -1,68 +1,39 @@
 use clob::state::Side;
 use solana_sdk::signature::Signer;
-use std::rc::Rc;
 
-use crate::svm::{market::MarketFixture, test::TestFixture};
+use crate::svm::TwoUserScenario;
 
 #[tokio::test]
 async fn test_orderbook_basic_matching() {
-    let fixture = TestFixture::new().await;
-    let ctx = Rc::clone(&fixture.ctx);
+    let scenario = TwoUserScenario::new().await;
+    let market = &scenario.market;
+    let alice = &scenario.alice.keypair;
+    let bob = &scenario.bob.keypair;
 
-    // Setup test accounts
-    let alice = ctx.borrow_mut().gen_and_fund_key();
-    let bob = ctx.borrow_mut().gen_and_fund_key();
+    // Test 1: Verify user balances (users are pre-funded and deposited)
+    println!("=== Test 1: User Balance Verification ===");
 
-    // Initialize market
-    let market = MarketFixture::new(ctx.clone(), &fixture.base_mint, &fixture.quote_mint).await;
+    let alice_balance = market.get_user_balance(&alice.pubkey());
+    let bob_balance = market.get_user_balance(&bob.pubkey());
 
-    // Create token accounts for users
-    let alice_base_account = fixture
-        .base_mint
-        .create_token_account(&alice.pubkey())
-        .await;
-    let _alice_quote_account = fixture
-        .quote_mint
-        .create_token_account(&alice.pubkey())
-        .await;
-    let _bob_base_account = fixture.base_mint.create_token_account(&bob.pubkey()).await;
-    let bob_quote_account = fixture.quote_mint.create_token_account(&bob.pubkey()).await;
-
-    // Mint tokens to users
-    fixture
-        .base_mint
-        .mint_to(&alice_base_account, 1000_000_000)
-        .await; // 1000 base tokens
-    fixture
-        .quote_mint
-        .mint_to(&bob_quote_account, 1000_000_000)
-        .await; // 1000 quote tokens
-
-    // Test 1: Users deposit tokens
-    println!("=== Test 1: User Deposits ===");
-
-    let deposit_result = market
-        .deposit(
-            &alice,
-            fixture.base_mint.mint,
-            alice_base_account,
-            100_000_000,
-        )
-        .await;
-    assert!(
-        deposit_result.is_ok(),
-        "Alice's base deposit should succeed"
+    // Verify pre-deposited balances (100 tokens each)
+    assert_eq!(
+        alice_balance.base_balance, 100_000_000,
+        "Alice should have 100 base tokens"
     );
-
-    let deposit_result = market
-        .deposit(
-            &bob,
-            fixture.quote_mint.mint,
-            bob_quote_account,
-            100_000_000,
-        )
-        .await;
-    assert!(deposit_result.is_ok(), "Bob's quote deposit should succeed");
+    assert_eq!(
+        alice_balance.quote_balance, 100_000_000,
+        "Alice should have 100 quote tokens"
+    );
+    assert_eq!(
+        bob_balance.base_balance, 100_000_000,
+        "Bob should have 100 base tokens"
+    );
+    assert_eq!(
+        bob_balance.quote_balance, 100_000_000,
+        "Bob should have 100 quote tokens"
+    );
+    println!("Verified: Both users have pre-deposited balances");
 
     // Test 2: Place orders and verify matching
     println!("=== Test 2: Order Placement and Matching ===");
@@ -202,78 +173,13 @@ async fn test_orderbook_basic_matching() {
 
 #[tokio::test]
 async fn test_partial_fills_and_price_time_priority() {
-    let fixture = TestFixture::new().await;
-    let ctx = Rc::clone(&fixture.ctx);
+    let scenario = crate::svm::TradingScenario::new().await;
+    let market = &scenario.market;
+    let alice = &scenario.alice.keypair;
+    let bob = &scenario.bob.keypair;
+    let charlie = &scenario.charlie.keypair;
 
-    // Setup test accounts
-    let alice = ctx.borrow_mut().gen_and_fund_key();
-    let bob = ctx.borrow_mut().gen_and_fund_key();
-    let charlie = ctx.borrow_mut().gen_and_fund_key();
-
-    // Create market
-    let market = MarketFixture::new(ctx.clone(), &fixture.base_mint, &fixture.quote_mint).await;
-
-    // Create token accounts and fund users
-    let alice_base_account = fixture
-        .base_mint
-        .create_token_account(&alice.pubkey())
-        .await;
-    let _alice_quote_account = fixture
-        .quote_mint
-        .create_token_account(&alice.pubkey())
-        .await;
-    let _bob_base_account = fixture.base_mint.create_token_account(&bob.pubkey()).await;
-    let bob_quote_account = fixture.quote_mint.create_token_account(&bob.pubkey()).await;
-    let _charlie_base_account = fixture
-        .base_mint
-        .create_token_account(&charlie.pubkey())
-        .await;
-    let charlie_quote_account = fixture
-        .quote_mint
-        .create_token_account(&charlie.pubkey())
-        .await;
-
-    fixture
-        .base_mint
-        .mint_to(&alice_base_account, 1000_000_000)
-        .await;
-    fixture
-        .quote_mint
-        .mint_to(&bob_quote_account, 1000_000_000)
-        .await;
-    fixture
-        .quote_mint
-        .mint_to(&charlie_quote_account, 1000_000_000)
-        .await;
-
-    // Deposit tokens
-    market
-        .deposit(
-            &alice,
-            fixture.base_mint.mint,
-            alice_base_account,
-            100_000_000,
-        )
-        .await
-        .unwrap();
-    market
-        .deposit(
-            &bob,
-            fixture.quote_mint.mint,
-            bob_quote_account,
-            100_000_000,
-        )
-        .await
-        .unwrap();
-    market
-        .deposit(
-            &charlie,
-            fixture.quote_mint.mint,
-            charlie_quote_account,
-            100_000_000,
-        )
-        .await
-        .unwrap();
+    // Users are pre-funded and deposited via TradingScenario
 
     println!("=== Test: Price-Time Priority and Partial Fills ===");
 

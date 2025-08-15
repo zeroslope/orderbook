@@ -1,7 +1,8 @@
 use crate::errors::ErrorCode;
 use crate::events::{OrderFilled, OrderPlaced};
 use crate::state::{
-    AskSide, BidSide, EventQueue, FillEvent, Market, Order, OrderBook, Side, UserBalance,
+    AskSide, BidSide, EventQueue, FillEvent, Market, Order, OrderBook, Side, TimeInForce,
+    UserBalance,
 };
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{TokenAccount, TokenInterface};
@@ -53,9 +54,10 @@ pub struct PlaceLimitOrder<'info> {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct PlaceLimitOrderParams {
-    pub side: Side,    // Buy or Sell
-    pub price: u64,    // Price in quote_tick_size units
-    pub quantity: u64, // Quantity in base_lot_size units
+    pub side: Side,                 // Buy or Sell
+    pub price: u64,                 // Price in quote_tick_size units
+    pub quantity: u64,              // Quantity in base_lot_size units
+    pub time_in_force: TimeInForce, // Time in force type
 }
 
 impl PlaceLimitOrder<'_> {
@@ -121,6 +123,11 @@ impl PlaceLimitOrder<'_> {
             Side::Bid => asks.orderbook.match_orders(&mut new_order)?,
             Side::Ask => bids.orderbook.match_orders(&mut new_order)?,
         };
+
+        // Handle Fill-Or-Kill (FOK): if order wasn't completely filled, reject it
+        if params.time_in_force == TimeInForce::FOK && new_order.remaining_quantity > 0 {
+            return Err(ErrorCode::FillOrKillNotFilled.into());
+        }
 
         // Process fills: update taker balance immediately, queue events for maker balance updates
         for fill in fills.iter() {
@@ -199,7 +206,8 @@ impl PlaceLimitOrder<'_> {
         }
 
         // If order still has remaining quantity, add to appropriate orderbook
-        if new_order.remaining_quantity > 0 {
+        // But skip for IOC (Immediate-Or-Cancel) orders - they should not rest in the orderbook
+        if new_order.remaining_quantity > 0 && params.time_in_force != TimeInForce::IOC {
             // Reserve required balance for the remaining order
             match params.side {
                 Side::Bid => {

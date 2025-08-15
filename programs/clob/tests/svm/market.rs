@@ -225,6 +225,18 @@ impl MarketFixture {
         price: u64,
         quantity: u64,
     ) -> TransactionResult {
+        self.place_limit_order_with_tif(user, side, price, quantity, clob::state::TimeInForce::GTC)
+            .await
+    }
+
+    pub async fn place_limit_order_with_tif(
+        &self,
+        user: &Keypair,
+        side: Side,
+        price: u64,
+        quantity: u64,
+        time_in_force: clob::state::TimeInForce,
+    ) -> TransactionResult {
         let mut ctx = self.ctx.borrow_mut();
 
         let (user_balance_pda, _) = get_user_balance_pda(&user.pubkey(), &self.market);
@@ -249,6 +261,7 @@ impl MarketFixture {
                     side,
                     price,
                     quantity,
+                    time_in_force,
                 },
             }
             .data(),
@@ -344,6 +357,11 @@ impl MarketFixture {
             clob::state::Side::Bid => self.get_bids_orderbook().orderbook.len(),
             clob::state::Side::Ask => self.get_asks_orderbook().orderbook.len(),
         }
+    }
+
+    pub fn orderbooks_are_empty(&self) -> bool {
+        self.get_orderbook_order_count(Side::Bid) == 0
+            && self.get_orderbook_order_count(Side::Ask) == 0
     }
 }
 

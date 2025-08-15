@@ -1,28 +1,13 @@
+use crate::svm::{market::MarketFixture, test::TestFixture, TradingUser};
 use std::rc::Rc;
-
-use solana_sdk::signature::Signer;
-
-use crate::svm::{market::MarketFixture, test::TestFixture};
 
 #[tokio::test]
 async fn test_vault_workflow() {
     let fixture = TestFixture::new().await;
     let ctx = Rc::clone(&fixture.ctx);
 
-    let user = fixture.ctx.borrow_mut().gen_and_fund_key();
-
-    // Setup initial token amounts (1000 tokens with 6 decimals)
-    let initial_amount = 1_000_000_000;
-
-    // Create ATAs and mint initial tokens to user
-    let user_base_account = fixture
-        .base_mint
-        .create_and_mint(&user.pubkey(), initial_amount)
-        .await;
-    let user_quote_account = fixture
-        .quote_mint
-        .create_and_mint(&user.pubkey(), initial_amount)
-        .await;
+    // Create user for vault testing (no market deposits yet)
+    let user = TradingUser::new_for_vault_testing(ctx.clone(), &fixture).await;
 
     // Step 1: Initialize market
     println!("=== Testing Market Initialization ===");
@@ -42,9 +27,9 @@ async fn test_vault_workflow() {
     // Deposit base tokens
     match market
         .deposit(
-            &user,
+            &user.keypair,
             fixture.base_mint.mint,
-            user_base_account,
+            user.base_account,
             deposit_amount,
         )
         .await
@@ -59,9 +44,9 @@ async fn test_vault_workflow() {
     // Deposit quote tokens
     match market
         .deposit(
-            &user,
+            &user.keypair,
             fixture.quote_mint.mint,
-            user_quote_account,
+            user.quote_account,
             deposit_amount,
         )
         .await
@@ -82,9 +67,9 @@ async fn test_vault_workflow() {
 
     match market
         .deposit(
-            &user,
+            &user.keypair,
             fixture.base_mint.mint,
-            user_base_account,
+            user.base_account,
             excessive_amount,
         )
         .await
@@ -108,9 +93,9 @@ async fn test_vault_workflow() {
 
     match market
         .withdraw(
-            &user,
+            &user.keypair,
             fixture.base_mint.mint,
-            user_base_account,
+            user.base_account,
             withdraw_amount,
         )
         .await
@@ -131,9 +116,9 @@ async fn test_vault_workflow() {
 
     match market
         .withdraw(
-            &user,
+            &user.keypair,
             fixture.quote_mint.mint,
-            user_quote_account,
+            user.quote_account,
             excessive_withdraw,
         )
         .await
@@ -150,7 +135,7 @@ async fn test_vault_workflow() {
 
     // Test close with non-zero balance (should fail)
     println!("Testing close user balance with non-zero balance (should fail)");
-    match market.close_user_balance(&user).await {
+    match market.close_user_balance(&user.keypair).await {
         Ok(_) => panic!("Expected close to fail with non-zero balance"),
         Err(_) => println!("Close user balance failed as expected"),
     }
@@ -163,9 +148,9 @@ async fn test_vault_workflow() {
 
     match market
         .withdraw(
-            &user,
+            &user.keypair,
             fixture.base_mint.mint,
-            user_base_account,
+            user.base_account,
             remaining_base,
         )
         .await
@@ -179,9 +164,9 @@ async fn test_vault_workflow() {
 
     match market
         .withdraw(
-            &user,
+            &user.keypair,
             fixture.quote_mint.mint,
-            user_quote_account,
+            user.quote_account,
             remaining_quote,
         )
         .await
@@ -195,7 +180,7 @@ async fn test_vault_workflow() {
 
     // Test close with zero balance (should succeed)
     println!("Testing close user balance with zero balance (should succeed)");
-    match market.close_user_balance(&user).await {
+    match market.close_user_balance(&user.keypair).await {
         Ok(_) => println!("Close user balance succeeded"),
         Err(err) => panic!("Expected close to succeed: {:?}", err),
     }

@@ -2,15 +2,6 @@
 
 A high-performance decentralized limit order book implementation built on Solana using the Anchor framework. This CLOB features centralized liquidity, efficient order matching with zero-copy heap-based orderbooks, comprehensive time-in-force order types (GTC, IOC, FOK), and advanced event processing for real-time market data.
 
-## ⚡ Key Features
-
-🔥 **Professional Order Management** - Complete time-in-force support with GTC, IOC, and FOK order types  
-🚀 **Zero-Copy Performance** - Heap-based orderbooks with O(log n) operations  
-💰 **Centralized Liquidity** - Pooled tokens for maximum efficiency  
-⏱️ **Price-Time Priority** - Professional matching algorithm  
-📡 **Event-Driven** - Real-time market data and deferred balance updates  
-🧪 **Battle-Tested** - Comprehensive test suite with 100% coverage
-
 ## 🏗️ High-Level Architecture
 
 ### Core Components
@@ -18,36 +9,46 @@ A high-performance decentralized limit order book implementation built on Solana
 The CLOB consists of four main architectural layers:
 
 #### 1. Market State
+
 The central `Market` account contains:
+
 - **Base Mint**: Address of the base token (e.g., SOL)
-- **Quote Mint**: Address of the quote token (e.g., USDC)  
+- **Quote Mint**: Address of the quote token (e.g., USDC)
 - **Lot Sizes**: Minimum tradeable units for price and quantity
 - **Next Order ID**: Global counter for unique order identification
 - **Event Queue**: Reference to the event queue for deferred balance updates
 
 #### 2. Token Vaults
+
 Centralized liquidity storage:
+
 - **Base Vault**: PDA-controlled token account holding all base tokens
 - **Quote Vault**: PDA-controlled token account holding all quote tokens
 - **Centralized Model**: All user funds pooled for efficient matching
 
 #### 3. Order Books (Zero-Copy Heap Implementation)
+
 **Major Improvement**: Upgraded from Vec-based to zero-copy heap-based orderbooks for better performance:
+
 - **Bids Book**: Binary heap for buy orders (Side::Bid) with max-heap ordering
-- **Asks Book**: Binary heap for sell orders (Side::Ask) with min-heap ordering  
+- **Asks Book**: Binary heap for sell orders (Side::Ask) with min-heap ordering
 - **Zero-Copy**: Uses `#[zero_copy]` accounts for direct memory access without serialization overhead
 - **Price-Time Priority**: Orders sorted by best price first, then earliest timestamp
 - **High Performance**: Efficient O(log n) insertions and O(1) peek operations
 
-#### 4. User Balances  
+#### 4. User Balances
+
 Individual balance tracking without token custody:
+
 - **Base Balance**: User's base token balance in the market
 - **Quote Balance**: User's quote token balance in the market
 - **Per-Market**: Separate balance account for each market
 - **No Token Holding**: Balances are accounting records, not actual token accounts
 
 #### 5. Event Queue & Processing
+
 **New Feature**: Asynchronous balance update system:
+
 - **Event Queue**: Circular buffer storing fill events for deferred processing
 - **Two-Phase Updates**: Taker balances updated immediately, maker balances queued
 - **Sequential Processing**: Events processed in strict FIFO order
@@ -64,6 +65,7 @@ Individual balance tracking without token custody:
 ### 📋 Order Management Features
 
 #### Time-in-Force Support
+
 Advanced order execution control with three professional time-in-force types:
 
 - **GTC (Good-Till-Cancelled)**: Default order type that remains active in the orderbook until explicitly cancelled or filled
@@ -71,6 +73,7 @@ Advanced order execution control with three professional time-in-force types:
 - **FOK (Fill-Or-Kill)**: Must be filled completely and immediately, or the entire order is rejected
 
 #### Order Lifecycle
+
 1. **Placement**: Orders are validated, matched against existing liquidity, and processed according to time-in-force rules
 2. **Matching**: Automatic execution using price-time priority matching algorithm
 3. **Settlement**: Two-phase balance updates (immediate taker, queued maker)
@@ -93,6 +96,7 @@ Advanced order execution control with three professional time-in-force types:
 - Anchor 0.31.1
 - Node.js 22+
 - Yarn
+
 ### Build
 
 ```bash
@@ -184,7 +188,8 @@ enum TimeInForce {
 }
 ```
 
-**Behavior**: 
+**Behavior**:
+
 - **GTC Orders**: Taker balances are updated immediately upon matching, maker balance updates are queued in the event queue, remaining order quantity is added to the appropriate orderbook
 - **IOC Orders**: Execute immediately against available liquidity, any unfilled portion is cancelled (no resting orders created)
 - **FOK Orders**: Either fill the entire order immediately or reject the transaction with `FillOrKillNotFilled` error
@@ -199,13 +204,14 @@ pub fn consume_events(
     params: ConsumeEventsParams
 ) -> Result<()>
 
-// Parameters  
+// Parameters
 struct ConsumeEventsParams {
     limit: u8,             // Maximum number of events to process
 }
 ```
 
 **Behavior**:
+
 - Processes events sequentially in FIFO order
 - Updates maker balances based on filled orders
 - Stops processing if a maker account is not provided
@@ -298,173 +304,36 @@ pub struct MarketInitialized {
 
 ## 💡 Example Usage
 
-Here's a complete example demonstrating time-in-force order types and the two-phase balance update system:
+### Workflow Pseudocode
 
-```typescript
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
-import { Clob } from "../target/types/clob";
-
-// 1. Initialize market with orderbooks and event queue
-const initializeParams = {
-  baseMint: baseMint.publicKey,
-  quoteMint: quoteMint.publicKey,
-  baseLotSize: new anchor.BN(1_000_000), // 1.0 base token
-  quoteTickSize: new anchor.BN(1_000), // 0.001 quote token
-};
-
-await program.methods
-  .initialize(initializeParams)
-  .accounts({
-    authority: authority.publicKey,
-    market: marketPda,
-    baseVault: baseVaultPda,
-    quoteVault: quoteVaultPda,
-    baseMint: baseMint.publicKey,
-    quoteMint: quoteMint.publicKey,
-    bids: bidsPda,           // Zero-copy heap orderbook
-    asks: asksPda,          // Zero-copy heap orderbook  
-    eventQueue: eventQueuePda, // Event queue for deferred updates
-  })
-  .rpc();
-
-// 2. Alice places GTC sell order (maker) - remains in orderbook until filled/cancelled
-await program.methods
-  .placeLimitOrder({
-    side: { ask: {} },
-    price: new anchor.BN(2000),
-    quantity: new anchor.BN(5),
-    timeInForce: { gtc: {} },  // Good-Till-Cancelled
-  })
-  .accounts({
-    market: marketPda,
-    bids: bidsPda,
-    asks: asksPda,
-    eventQueue: eventQueuePda,
-    userBalance: aliceBalancePda,
-    baseVault: baseVaultPda,
-    quoteVault: quoteVaultPda,
-    user: alice.publicKey,
-  })
-  .signers([alice])
-  .rpc();
-
-// 3. Bob places IOC buy order (taker) - executes immediately, cancels unfilled portion
-// Taker balance updated immediately, maker balance queued
-await program.methods
-  .placeLimitOrder({
-    side: { bid: {} },
-    price: new anchor.BN(2000),
-    quantity: new anchor.BN(5),
-    timeInForce: { ioc: {} },  // Immediate-Or-Cancel
-  })
-  .accounts({
-    market: marketPda,
-    bids: bidsPda,
-    asks: asksPda,
-    eventQueue: eventQueuePda,
-    userBalance: bobBalancePda,
-    baseVault: baseVaultPda,
-    quoteVault: quoteVaultPda,
-    user: bob.publicKey,
-  })
-  .signers([bob])
-  .rpc();
-
-// 4. Process queued events to update Alice's balance
-await program.methods
-  .consumeEvents({ limit: 10 })
-  .accounts({
-    market: marketPda,
-    eventQueue: eventQueuePda,
-  })
-  .remainingAccounts([
-    {
-      pubkey: aliceBalancePda,
-      isWritable: true,
-      isSigner: false,
-    }
-  ])
-  .rpc();
-
-// Additional Time-in-Force Examples:
-
-// FOK Order - Must be filled completely or rejected entirely
-await program.methods
-  .placeLimitOrder({
-    side: { bid: {} },
-    price: new anchor.BN(1950),
-    quantity: new anchor.BN(10),
-    timeInForce: { fok: {} },  // Fill-Or-Kill - complete fill or rejection
-  })
-  .accounts({ /* same accounts */ })
-  .signers([trader])
-  .rpc();
-
-// GTC Order - Standard limit order behavior
-await program.methods
-  .placeLimitOrder({
-    side: { ask: {} },
-    price: new anchor.BN(2050),
-    quantity: new anchor.BN(8),
-    timeInForce: { gtc: {} },  // Good-Till-Cancelled - default behavior
-  })
-  .accounts({ /* same accounts */ })
-  .signers([trader])
-  .rpc();
-
-// IOC Order - Execute immediately, cancel remainder
-await program.methods
-  .placeLimitOrder({
-    side: { bid: {} },
-    price: new anchor.BN(2000),
-    quantity: new anchor.BN(15),
-    timeInForce: { ioc: {} },  // Immediate-Or-Cancel - no resting order
-  })
-  .accounts({ /* same accounts */ })
-  .signers([trader])
-  .rpc();
 ```
+1. CREATE MARKET & INFRASTRUCTURE
+   ├── create bids orderbook (zero-copy heap)
+   ├── create asks orderbook (zero-copy heap)
+   ├── create event_queue (circular buffer)
+   └── initialize market (base_mint, quote_mint, lot_sizes)
 
-## 📈 Time-in-Force Usage Scenarios
+2. DEPOSIT FUNDS
+   ├── user_balance ← deposit(base_tokens)
+   └── user_balance ← deposit(quote_tokens)
 
-### When to Use Each Order Type
+3. PLACE ORDERS
+   ├── place_limit_order(side, price, quantity, time_in_force)
+   ├── automatic matching against existing orders
+   ├── taker balance updated immediately
+   └── maker balance updates queued in event_queue
 
-#### GTC (Good-Till-Cancelled) - Default
-- **Use Case**: Standard limit orders for long-term liquidity provision
-- **Behavior**: Order remains active until filled, cancelled, or market closes
-- **Best For**: Market makers, patient traders, setting limit prices
+4. CONSUME EVENTS (Process Queued Updates)
+   ├── consume_events(limit)
+   ├── process fill events in FIFO order
+   └── update maker balances from event_queue
 
-#### IOC (Immediate-Or-Cancel) - Liquidity Taking  
-- **Use Case**: Taking available liquidity without creating resting orders
-- **Behavior**: Executes immediately against available orders, cancels remainder
-- **Best For**: Quick execution, avoiding market impact, algorithmic trading
+5. WITHDRAW FUNDS
+   ├── withdraw(base_amount) → user_token_account
+   └── withdraw(quote_amount) → user_token_account
 
-#### FOK (Fill-Or-Kill) - All-or-Nothing
-- **Use Case**: Ensuring complete fills for large orders or price-sensitive trades
-- **Behavior**: Must fill entirely or transaction fails completely  
-- **Best For**: Large block trades, arbitrage, exact quantity requirements
-
-### Error Handling
-
-```typescript
-try {
-  // FOK order that might not be completely fillable
-  await program.methods
-    .placeLimitOrder({
-      side: { bid: {} },
-      price: new anchor.BN(2000),
-      quantity: new anchor.BN(100), // Large quantity
-      timeInForce: { fok: {} },
-    })
-    .accounts({ /* accounts */ })
-    .rpc();
-} catch (error) {
-  if (error.toString().includes("FillOrKillNotFilled")) {
-    console.log("FOK order could not be completely filled");
-    // Handle partial fill rejection
-  }
-}
+6. CLEANUP (Optional)
+   └── close_user_balance (when empty)
 ```
 
 ## 🧪 Testing
@@ -494,23 +363,27 @@ cargo test-sbf test_vault_workflow -- --nocapture
 ### Test Scenarios Covered
 
 1. **Basic Operations**
+
    - Market initialization with orderbooks and event queue
    - Token deposits and withdrawals
    - User balance management
 
 2. **Order Matching**
+
    - Limit order placement with zero-copy heap orderbooks
    - Automatic order matching with price-time priority
    - Partial fills and remaining quantity handling
    - Immediate taker balance updates
 
 3. **Event Processing**
+
    - Fill event creation and queuing
    - Sequential event consumption
    - Maker balance updates via consume_events
    - Event queue management
 
 4. **Order Management**
+
    - Order cancellation with balance restoration
    - Balance reservation and release
    - Comprehensive error handling
@@ -549,11 +422,13 @@ wallet = "~/.config/solana/id.json"
 ### Zero-Copy Heap Orderbooks
 
 **Before (Vec-based)**:
+
 - Serialization overhead on every access
 - O(n) insertions due to sorting requirements
 - Limited capacity (50 orders per side)
 
 **After (Heap-based)**:
+
 - Zero-copy direct memory access
 - O(log n) insertions with automatic heap ordering
 - Larger capacity with efficient memory usage
@@ -562,6 +437,7 @@ wallet = "~/.config/solana/id.json"
 ### Event Queue Architecture
 
 **Benefits**:
+
 - **Scalability**: Defers expensive balance calculations
 - **Consistency**: Processes events in strict order
 - **Flexibility**: Allows batched event processing
@@ -583,9 +459,3 @@ wallet = "~/.config/solana/id.json"
 
 - Enhanced error handling and recovery
 - Performance metrics and monitoring
-
----
-
-**Program ID**: `FpTyzdMqQS4NWM149ryMWq74waAoHXMBpJnXb4yUNV1F`
-
-For more detailed information, check the inline documentation in the source code and the comprehensive test suite.
